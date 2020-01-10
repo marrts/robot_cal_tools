@@ -100,11 +100,13 @@ rct_optimizations::ExtrinsicCameraOnWristResult rct_optimizations::optimize(cons
   }
 
   ceres::Solver::Options options;
-  options.max_num_iterations = 150; // TODO: How do we expose these?
+  options.max_num_iterations = 500; // TODO: How do we expose these?
   ceres::Solver::Summary summary;
-
+//  problem.Get
 
   ceres::Solve(options, &problem, &summary);
+  std::cout << summary.FullReport() << std::endl;
+
 
   ExtrinsicCameraOnWristResult result;
   result.converged = summary.termination_type == ceres::CONVERGENCE;

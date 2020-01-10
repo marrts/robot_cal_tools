@@ -56,7 +56,7 @@ public:
 private:
   void onNewImage(const sensor_msgs::msg::Image::ConstPtr& msg)
   {
-    RCLCPP_INFO(this->get_logger(), "New image");
+//    RCLCPP_INFO(this->get_logger(), "New image");
     cv_bridge::CvImagePtr cv_ptr;
     try
     {
@@ -75,6 +75,7 @@ private:
       }
 
       last_frame_ = cv_ptr;
+      last_frame_time_ = static_cast<int>(this->now().seconds());
     }
     catch (cv_bridge::Exception& e)
     {
@@ -118,7 +119,9 @@ private:
 
   bool captureImage(cv::Mat& frame)
   {
-    if (last_frame_)
+    int curr_time = static_cast<int>(this->now().seconds());
+    int time_since = curr_time - last_frame_time_;
+    if (last_frame_ && time_since<=1)
     {
       frame = last_frame_->image;
       return true;
@@ -128,20 +131,30 @@ private:
 
   bool captureTransform(geometry_msgs::msg::TransformStamped& out)
   {
-    try
+    bool can = false;
+    while(!can)
     {
-      geometry_msgs::msg::TransformStamped t = buffer_.lookupTransform(base_frame_, tool_frame_, tf2::TimePointZero, tf2::Duration(std::chrono::seconds(10)));
-      out = t;
-      return true;
+      can = buffer_.canTransform(base_frame_, tool_frame_, tf2::TimePointZero);
+      if (can)
+      {
+        try
+        {
+          geometry_msgs::msg::TransformStamped t = buffer_.lookupTransform(base_frame_, tool_frame_, tf2::TimePointZero, tf2::Duration(std::chrono::seconds(10)));
+          out = t;
+          return true;
+        }
+        catch (const tf2::TransformException& ex)
+        {
+          RCLCPP_WARN(this->get_logger(), "Failed to compute transform");
+    //      ROS_WARN_STREAM("Failed to compute transfrom between " << base_frame_ << " and " << tool_frame_ << ": "
+    //                      << ex.what());
+          return false;
+        }
+      }
     }
-    catch (const tf2::TransformException& ex)
-    {
-      RCLCPP_WARN(this->get_logger(), "Failed to compute transform");
-//      ROS_WARN_STREAM("Failed to compute transfrom between " << base_frame_ << " and " << tool_frame_ << ": "
-//                      << ex.what());
-      return false;
-    }
+    return false;
   }
+
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr trigger_server_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_server_;
 
@@ -163,6 +176,7 @@ private:
   rct_image_tools::ModifiedCircleGridObservationFinder finder_;
 
   cv_bridge::CvImagePtr last_frame_;
+  int last_frame_time_;
 
   std::string save_dir_;
 };
